@@ -45,22 +45,43 @@ export class LocationProcessor extends WorkerHost {
 
     const logMode = this.configService.get<string>('app.logMode');
     const ttl = this.configService.get<number>('app.entryTtlSeconds') ?? 300;
+    const currentAreaIds = new Set(areas.map((a) => a.id));
 
-    for (const area of areas) {
-      if (logMode === 'entry_only') {
-        const key = `entry:${userId}:${area.id}`;
-        const exists = await this.redis.get(key);
+    if (logMode === 'entry_only') {
+      const setKey = `user-areas:${userId}`;
+      const previousAreaIds = await this.redis.smembers(setKey);
 
-        if (exists) continue;
-
-        await this.redis.setex(key, ttl, '1');
+      // Remove areas the user has left
+      const leftAreas = previousAreaIds.filter((id) => !currentAreaIds.has(id));
+      if (leftAreas.length > 0) {
+        await this.redis.srem(setKey, ...leftAreas);
       }
 
-      await this.areaEntryLogRepository.save({
-        userId,
-        areaId: area.id,
-        enteredAt: timestamp,
-      });
+      // Find newly entered areas and log them
+      for (const area of areas) {
+        const isNew = await this.redis.sadd(setKey, area.id);
+        if (isNew === 0) continue;
+
+        await this.redis.expire(setKey, ttl);
+        await this.areaEntryLogRepository.save({
+          userId,
+          areaId: area.id,
+          enteredAt: timestamp,
+        });
+      }
+
+      // Refresh TTL if user is in any area
+      if (currentAreaIds.size > 0) {
+        await this.redis.expire(setKey, ttl);
+      }
+    } else {
+      for (const area of areas) {
+        await this.areaEntryLogRepository.save({
+          userId,
+          areaId: area.id,
+          enteredAt: timestamp,
+        });
+      }
     }
   }
 }
