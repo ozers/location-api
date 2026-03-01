@@ -8,8 +8,8 @@ import {
 } from 'typeorm';
 import { Area } from './area.entity';
 
-@Entity('area_entity_logs')
-export class AreaEntityLog {
+@Entity('area_entry_logs')
+export class AreaEntryLog {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 

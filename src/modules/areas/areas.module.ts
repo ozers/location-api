@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { Area } from '../../entities/area.entity';
+import { Area } from '../../entities';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AreasController } from './areas.controller';
 import { AreasService } from './areas.service';

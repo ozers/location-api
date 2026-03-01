@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import configuration from './config/configuration';
 import { BullModule } from '@nestjs/bullmq';
 import { AreasModule } from './modules/areas/areas.module';
+import { LocationsModule } from './modules/locations/locations.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { AreasModule } from './modules/areas/areas.module';
       }),
     }),
     AreasModule,
+    LocationsModule,
   ],
 })
 export class AppModule {}
