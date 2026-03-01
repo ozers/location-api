@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 @Entity('areas')
@@ -14,6 +15,7 @@ export class Area {
   @Column({ type: 'varchar', length: 255 })
   name!: string;
 
+  @Index({ spatial: true })
   @Column({ type: 'geometry', spatialFeatureType: 'Polygon', srid: 4326 })
   boundary!: string;
 

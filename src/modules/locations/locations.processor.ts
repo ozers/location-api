@@ -6,7 +6,9 @@ import { LocationLog, AreaEntryLog, Area } from '../../entities';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-@Processor('location-processing')
+@Processor('location-processing', {
+  concurrency: parseInt(process.env.QUEUE_CONCURRENCY ?? '5', 10),
+})
 export class LocationProcessor extends WorkerHost {
   private redis: Redis;
 

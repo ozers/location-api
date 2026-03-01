@@ -5,6 +5,7 @@ export default () => ({
     name: process.env.DB_NAME ?? 'location_db',
     username: process.env.DB_USERNAME ?? 'postgres',
     password: process.env.DB_PASSWORD ?? 'postgres',
+    poolSize: parseInt(process.env.DB_POOL_SIZE ?? '20', 10),
   },
   redis: {
     host: process.env.REDIS_HOST ?? 'localhost',

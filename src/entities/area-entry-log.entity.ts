@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -13,6 +14,7 @@ export class AreaEntryLog {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  @Index()
   @Column({ type: 'varchar', length: 100, name: 'user_id' })
   userId!: string;
 
@@ -20,6 +22,7 @@ export class AreaEntryLog {
   @JoinColumn({ name: 'area_id' })
   area!: Area;
 
+  @Index()
   @Column({ name: 'area_id' })
   areaId!: string;
 

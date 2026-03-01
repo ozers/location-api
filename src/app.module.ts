@@ -28,6 +28,9 @@ import { QueueStatsModule } from './modules/queue-stats/queue-stats.module';
         database: config.get('database.name'),
         autoLoadEntities: true,
         synchronize: true,
+        extra: {
+          max: config.get('database.poolSize'),
+        },
       }),
     }),
     BullModule.forRootAsync({
