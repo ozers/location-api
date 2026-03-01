@@ -1,12 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import configuration from './config/configuration';
 import { BullModule } from '@nestjs/bullmq';
 import { AreasModule } from './modules/areas/areas.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { LogsModule } from './modules/logs/logs.module';
 import { HealthModule } from './modules/health/health.module';
+import { QueueStatsModule } from './modules/queue-stats/queue-stats.module';
 
 @Module({
   imports: [
@@ -36,10 +39,15 @@ import { HealthModule } from './modules/health/health.module';
         },
       }),
     }),
+    // Serve static files from the public directory
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
+    }),
     AreasModule,
     LocationsModule,
     LogsModule,
     HealthModule,
+    QueueStatsModule,
   ],
 })
 export class AppModule {}

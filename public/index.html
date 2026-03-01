@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Location API - Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    #map { height: 100vh; width: 100%; }
+
+    .sidebar {
+      position: absolute; top: 10px; right: 10px; z-index: 1000;
+      background: white; border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.15); width: 340px;
+      max-height: calc(100vh - 20px); display: flex; flex-direction: column;
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex; border-bottom: 2px solid #e0e0e0;
+      border-radius: 8px 8px 0 0; overflow: hidden; flex-shrink: 0;
+    }
+    .tab-btn {
+      flex: 1; padding: 10px 8px; border: none; background: #f5f5f5;
+      cursor: pointer; font-size: 12px; font-weight: 600; color: #666;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { background: #e8e8e8; }
+    .tab-btn.active { background: white; color: #4CAF50; border-bottom: 2px solid #4CAF50; margin-bottom: -2px; }
+
+    .tab-content { display: none; padding: 16px; overflow-y: auto; flex: 1; }
+    .tab-content.active { display: block; }
+
+    /* Tab 1: Areas */
+    .area-item {
+      padding: 10px; margin-bottom: 8px; border-radius: 6px;
+      border: 1px solid #e0e0e0; cursor: pointer; transition: all 0.2s;
+    }
+    .area-item:hover { background: #f5f5f5; border-color: #4CAF50; }
+    .area-item.active { background: #E8F5E9; border-color: #4CAF50; }
+    .area-name { font-weight: 600; font-size: 14px; color: #333; }
+    .area-date { font-size: 11px; color: #999; margin-top: 4px; }
+    .no-areas { color: #999; font-size: 13px; text-align: center; padding: 20px 0; }
+    .area-header { display: flex; align-items: center; justify-content: space-between; }
+
+    /* Shared buttons */
+    .btn {
+      padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer;
+      font-size: 13px; transition: all 0.2s;
+    }
+    .btn-primary { background: #4CAF50; color: white; }
+    .btn-primary:hover { background: #43A047; }
+    .btn-danger { background: #E53935; color: white; }
+    .btn-danger:hover { background: #C62828; }
+    .btn-secondary { background: #f5f5f5; color: #666; }
+    .btn-secondary:hover { background: #e0e0e0; }
+    .btn-sm { padding: 4px 8px; font-size: 11px; }
+    .btn-full { width: 100%; }
+    .btn-delete {
+      background: none; border: none; cursor: pointer; color: #ccc;
+      font-size: 16px; padding: 2px 6px; border-radius: 4px; transition: all 0.2s;
+    }
+    .btn-delete:hover { color: #E53935; background: #FFEBEE; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      z-index: 2000; align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: white; border-radius: 12px; padding: 24px;
+      width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .modal h3 { font-size: 16px; margin-bottom: 16px; color: #333; }
+    .modal input {
+      width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 14px; outline: none; margin-bottom: 16px;
+    }
+    .modal input:focus { border-color: #4CAF50; }
+    .modal-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+    .modal-buttons button { padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .btn-save { background: #4CAF50; color: white; }
+    .btn-save:hover { background: #43A047; }
+    .btn-cancel { background: #f5f5f5; color: #666; }
+    .btn-cancel:hover { background: #e0e0e0; }
+
+    /* Tab 2: Simulation */
+    .sim-section { margin-bottom: 16px; }
+    .sim-section h4 { font-size: 13px; color: #333; margin-bottom: 8px; }
+    .sim-users-list { max-height: 120px; overflow-y: auto; margin-bottom: 8px; }
+    .sim-user-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 8px; border-radius: 4px; margin-bottom: 4px; font-size: 12px;
+      border: 1px solid #e0e0e0;
+    }
+    .sim-user-color { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+    .sim-controls { display: flex; gap: 6px; margin-bottom: 12px; }
+    .sim-controls button { flex: 1; }
+    .slider-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+    .slider-row label { min-width: 80px; color: #666; }
+    .slider-row input[type=range] { flex: 1; }
+    .slider-row .val { min-width: 40px; text-align: right; font-weight: 600; }
+    .sim-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .sim-stat { background: #f5f5f5; border-radius: 4px; padding: 8px; text-align: center; }
+    .sim-stat .num { font-size: 18px; font-weight: 700; color: #333; }
+    .sim-stat .lbl { font-size: 10px; color: #999; }
+    .hint { background: #FFF3E0; border: 1px solid #FFE0B2; border-radius: 6px; padding: 8px 12px; font-size: 11px; color: #E65100; margin-bottom: 12px; }
+    .hint-blue { background: #E3F2FD; border-color: #BBDEFB; color: #1565C0; }
+
+    /* Tab 3: Load Test */
+    .lt-field { margin-bottom: 10px; }
+    .lt-field label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
+    .lt-field input {
+      width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 13px; outline: none;
+    }
+    .lt-field input:focus { border-color: #4CAF50; }
+    .lt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .lt-metric {
+      background: #f5f5f5; border-radius: 6px; padding: 10px; text-align: center;
+    }
+    .lt-metric .num { font-size: 20px; font-weight: 700; color: #333; }
+    .lt-metric .lbl { font-size: 10px; color: #999; margin-top: 2px; }
+    .lt-metric.fail .num { color: #E53935; }
+    .lt-section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #eee; }
+    .lt-section:last-child { border-bottom: none; }
+    .lt-section h4 { font-size: 13px; color: #333; margin-bottom: 10px; }
+    .smoke-result { padding: 10px; border-radius: 6px; font-size: 12px; margin-top: 8px; }
+    .smoke-pass { background: #E8F5E9; color: #2E7D32; }
+    .smoke-fail { background: #FFEBEE; color: #C62828; }
+    .smoke-running { background: #FFF3E0; color: #E65100; }
+    .warning-box { background: #FFF8E1; border: 1px solid #FFE082; border-radius: 6px; padding: 8px; font-size: 11px; color: #F57F17; margin-bottom: 12px; }
+    .queue-stats { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }
+    .q-stat { text-align: center; background: #ECEFF1; border-radius: 4px; padding: 6px; }
+    .q-stat .num { font-size: 14px; font-weight: 700; }
+    .q-stat .lbl { font-size: 9px; color: #78909C; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="sidebar">
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('areas')">Areas</button>
+      <button class="tab-btn" onclick="switchTab('simulation')">Simulation</button>
+      <button class="tab-btn" onclick="switchTab('loadtest')">Load Test</button>
+    </div>
+
+    <!-- Tab 1: Areas -->
+    <div id="tab-areas" class="tab-content active">
+      <button class="btn btn-primary btn-full" onclick="loadAreas()" style="margin-bottom:12px">Refresh</button>
+      <div id="area-list"><div class="no-areas">Loading...</div></div>
+    </div>
+
+    <!-- Tab 2: Simulation -->
+    <div id="tab-simulation" class="tab-content">
+      <div class="hint hint-blue">Click "Add User" then click the map to place a user. Click "Define Route" then click waypoints on the map, then "Done".</div>
+
+      <div class="sim-section">
+        <h4>Users</h4>
+        <div class="sim-controls">
+          <button class="btn btn-primary btn-sm" id="btnAddUser" onclick="simAddUser()">Add User</button>
+          <button class="btn btn-secondary btn-sm" id="btnDefineRoute" onclick="simDefineRoute()" disabled>Define Route</button>
+          <button class="btn btn-secondary btn-sm" id="btnRouteDone" onclick="simRouteDone()" style="display:none">Done</button>
+        </div>
+        <div id="sim-users-list" class="sim-users-list"></div>
+      </div>
+
+      <div class="sim-section">
+        <h4>Playback</h4>
+        <div class="sim-controls">
+          <button class="btn btn-primary btn-sm" id="btnPlay" onclick="simPlay()" disabled>Play</button>
+          <button class="btn btn-secondary btn-sm" id="btnPause" onclick="simPause()" disabled>Pause</button>
+          <button class="btn btn-danger btn-sm" id="btnStop" onclick="simStop()" disabled>Stop</button>
+        </div>
+        <div class="slider-row">
+          <label>Speed</label>
+          <input type="range" id="simSpeed" min="0.5" max="10" step="0.5" value="1">
+          <span class="val" id="simSpeedVal">1x</span>
+        </div>
+        <div class="slider-row">
+          <label>Ping (ms)</label>
+          <input type="range" id="simInterval" min="200" max="5000" step="100" value="1000">
+          <span class="val" id="simIntervalVal">1000</span>
+        </div>
+      </div>
+
+      <div class="sim-section">
+        <h4>Stats</h4>
+        <div class="sim-stats">
+          <div class="sim-stat"><div class="num" id="simSent">0</div><div class="lbl">Sent</div></div>
+          <div class="sim-stat"><div class="num" id="simOk">0</div><div class="lbl">Success</div></div>
+          <div class="sim-stat"><div class="num" id="simFail">0</div><div class="lbl">Failed</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Load Test -->
+    <div id="tab-loadtest" class="tab-content">
+      <div class="warning-box">Browser limit: ~6 concurrent connections. For 100+ req/s use k6 scripts instead.</div>
+
+      <div class="lt-section">
+        <h4>Configuration</h4>
+        <div class="lt-grid">
+          <div class="lt-field">
+            <label>Concurrent Users</label>
+            <input type="number" id="ltUsers" value="10" min="1">
+          </div>
+          <div class="lt-field">
+            <label>Requests/sec</label>
+            <input type="number" id="ltRps" value="50" min="1">
+          </div>
+          <div class="lt-field">
+            <label>Duration (s)</label>
+            <input type="number" id="ltDuration" value="30" min="1">
+          </div>
+          <div class="lt-field">
+            <label>Area Bounds</label>
+            <button class="btn btn-primary btn-sm btn-full" id="btnLtDraw" onclick="ltDrawBounds()">Draw</button>
+          </div>
+        </div>
+        <div class="lt-grid">
+          <div class="lt-field"><label>Min Lat</label><input type="number" id="ltMinLat" value="40.9" step="0.001"></div>
+          <div class="lt-field"><label>Max Lat</label><input type="number" id="ltMaxLat" value="41.1" step="0.001"></div>
+          <div class="lt-field"><label>Min Lng</label><input type="number" id="ltMinLng" value="28.8" step="0.001"></div>
+          <div class="lt-field"><label>Max Lng</label><input type="number" id="ltMaxLng" value="29.1" step="0.001"></div>
+        </div>
+        <div class="sim-controls">
+          <button class="btn btn-primary" id="ltStart" onclick="ltStartTest()">Start Load Test</button>
+          <button class="btn btn-danger" id="ltStopBtn" onclick="ltStopTest()" disabled>Stop</button>
+        </div>
+      </div>
+
+      <div class="lt-section">
+        <h4>Live Metrics</h4>
+        <div class="lt-grid">
+          <div class="lt-metric"><div class="num" id="ltTotalSent">0</div><div class="lbl">Total Sent</div></div>
+          <div class="lt-metric"><div class="num" id="ltTotalOk">0</div><div class="lbl">Success</div></div>
+          <div class="lt-metric fail"><div class="num" id="ltTotalFail">0</div><div class="lbl">Failed</div></div>
+          <div class="lt-metric"><div class="num" id="ltAvgTime">0</div><div class="lbl">Avg ms</div></div>
+          <div class="lt-metric"><div class="num" id="ltThroughput">0</div><div class="lbl">req/s</div></div>
+          <div class="lt-metric"><div class="num" id="ltElapsed">0</div><div class="lbl">Elapsed (s)</div></div>
+        </div>
+        <h4 style="margin-top:12px">Queue</h4>
+        <div class="queue-stats">
+          <div class="q-stat"><div class="num" id="qWaiting">-</div><div class="lbl">Wait</div></div>
+          <div class="q-stat"><div class="num" id="qActive">-</div><div class="lbl">Active</div></div>
+          <div class="q-stat"><div class="num" id="qCompleted">-</div><div class="lbl">Done</div></div>
+          <div class="q-stat"><div class="num" id="qFailed">-</div><div class="lbl">Fail</div></div>
+        </div>
+      </div>
+
+      <div class="lt-section">
+        <h4>Smoke Test</h4>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="btn btn-secondary btn-sm" id="btnSmokePick" onclick="smokePickPoint()">Pick Point</button>
+          <span style="font-size:11px;color:#999;line-height:28px" id="smokeCoord">No point selected</span>
+        </div>
+        <button class="btn btn-secondary btn-full" id="btnSmoke" onclick="runSmokeTest()" disabled>Run Smoke Test</button>
+        <div id="smokeResult"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Name Modal -->
+  <div class="modal-overlay" id="nameModal">
+    <div class="modal">
+      <h3>Area Name</h3>
+      <input type="text" id="areaName" placeholder="e.g. Kadikoy Bolgesi" autofocus />
+      <div class="modal-buttons">
+        <button class="btn-cancel" onclick="cancelDraw()">Cancel</button>
+        <button class="btn-save" onclick="saveArea()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script>
+    const API = window.location.origin;
+
+    // ── Map Setup ──
+    const map = L.map('map').setView([41.0, 28.98], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const colors = ['#4CAF50', '#2196F3', '#FF9800', '#E91E63', '#9C27B0', '#00BCD4'];
+    let layers = {};
+    let areas = [];
+    let drawnLayer = null;
+
+    // ── Tab Switching ──
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach((b, i) => {
+        b.classList.toggle('active', b.textContent.toLowerCase().replace(/\s/g,'') === name.toLowerCase().replace(/\s/g,''));
+      });
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+
+      // Show/hide draw controls depending on tab
+      const drawContainer = document.querySelector('.leaflet-draw');
+      if (drawContainer) drawContainer.style.display = name === 'areas' ? '' : 'none';
+
+      // Make polygons non-interactive in simulation/loadtest tabs so clicks pass through to map
+      const interactive = name === 'areas';
+      Object.values(layers).forEach(layer => {
+        if (interactive) {
+          layer.getElement() && (layer.getElement().style.pointerEvents = '');
+        } else {
+          layer.getElement() && (layer.getElement().style.pointerEvents = 'none');
+        }
+      });
+    }
+
+    // ── Draw Controls ──
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+    const drawControl = new L.Control.Draw({
+      draw: {
+        polygon: { shapeOptions: { color: '#4CAF50', fillOpacity: 0.2 } },
+        rectangle: { shapeOptions: { color: '#4CAF50', fillOpacity: 0.2 } },
+        polyline: false, circle: false, circlemarker: false, marker: false
+      },
+      edit: false
+    });
+    map.addControl(drawControl);
+
+    map.on(L.Draw.Event.CREATED, function (e) {
+      drawnLayer = e.layer;
+      drawnItems.addLayer(drawnLayer);
+      document.getElementById('nameModal').classList.add('show');
+      document.getElementById('areaName').value = '';
+      setTimeout(() => document.getElementById('areaName').focus(), 100);
+    });
+
+    document.getElementById('areaName').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') saveArea();
+      if (e.key === 'Escape') cancelDraw();
+    });
+
+    async function saveArea() {
+      const name = document.getElementById('areaName').value.trim();
+      if (!name) { document.getElementById('areaName').focus(); return; }
+      const latlngs = drawnLayer.getLatLngs()[0];
+      const coordinates = latlngs.map(ll => [ll.lng, ll.lat]);
+      coordinates.push([latlngs[0].lng, latlngs[0].lat]);
+      try {
+        const res = await fetch(`${API}/areas`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, boundary: { type: 'Polygon', coordinates: [coordinates] } })
+        });
+        if (!res.ok) { const err = await res.json(); alert('Error: ' + (err.message || JSON.stringify(err))); return; }
+        document.getElementById('nameModal').classList.remove('show');
+        drawnItems.removeLayer(drawnLayer);
+        drawnLayer = null;
+        loadAreas();
+      } catch (e) { alert('API connection error'); }
+    }
+
+    function cancelDraw() {
+      document.getElementById('nameModal').classList.remove('show');
+      if (drawnLayer) drawnItems.removeLayer(drawnLayer);
+      drawnLayer = null;
+    }
+
+    // ── Load & Display Areas ──
+    async function loadAreas() {
+      const listEl = document.getElementById('area-list');
+      try {
+        const res = await fetch(`${API}/areas`);
+        const json = await res.json();
+        areas = json.data || json;
+        Object.values(layers).forEach(l => map.removeLayer(l));
+        layers = {};
+        if (areas.length === 0) {
+          listEl.innerHTML = '<div class="no-areas">No areas yet. Draw a polygon on the map!</div>';
+          return;
+        }
+        listEl.innerHTML = '';
+        const bounds = L.latLngBounds();
+        areas.forEach((area, i) => {
+          const color = colors[i % colors.length];
+          const coords = area.boundary.coordinates[0].map(c => [c[1], c[0]]);
+          const polygon = L.polygon(coords, { color, fillColor: color, fillOpacity: 0.2, weight: 2, bubblingMouseEvents: true }).addTo(map);
+          polygon.bindPopup(`<b>${area.name}</b><br>ID: ${area.id}`);
+          layers[area.id] = polygon;
+          bounds.extend(coords);
+          const date = new Date(area.createdAt).toLocaleString('tr-TR');
+          listEl.innerHTML += `
+            <div class="area-item" id="item-${area.id}" onclick="focusArea('${area.id}')">
+              <div class="area-header">
+                <div class="area-name" style="color:${color}">${area.name}</div>
+                <button class="btn-delete" onclick="event.stopPropagation(); deleteArea('${area.id}', '${area.name}')" title="Delete">&#x2715;</button>
+              </div>
+              <div class="area-date">${date}</div>
+            </div>`;
+        });
+        map.fitBounds(bounds, { padding: [50, 50] });
+      } catch (e) {
+        listEl.innerHTML = '<div class="no-areas">API connection error. Is the server running?</div>';
+      }
+    }
+
+    function focusArea(id) {
+      document.querySelectorAll('.area-item').forEach(el => el.classList.remove('active'));
+      document.getElementById(`item-${id}`).classList.add('active');
+      const layer = layers[id];
+      map.fitBounds(layer.getBounds(), { padding: [80, 80] });
+      layer.openPopup();
+    }
+
+    async function deleteArea(id, name) {
+      if (!confirm(`"${name}" alanini silmek istediginize emin misiniz?`)) return;
+      try {
+        const res = await fetch(`${API}/areas/${id}`, { method: 'DELETE' });
+        if (!res.ok) { const err = await res.json(); alert('Error: ' + (err.message || JSON.stringify(err))); return; }
+        loadAreas();
+      } catch (e) { alert('API connection error'); }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // Tab 2: User Simulation
+    // ═══════════════════════════════════════════════════
+    const simColors = ['#E91E63', '#FF5722', '#3F51B5', '#009688', '#795548', '#607D8B'];
+    let simUsers = [];
+    let simSelectedUser = null;
+    let simMode = 'idle';
+    let simRunning = false;
+    let simTimer = null;
+    let simStats = { sent: 0, ok: 0, fail: 0 };
+
+    function simAddUser() {
+      simMode = 'placing';
+      document.getElementById('btnAddUser').textContent = 'Click map...';
+      map.getContainer().style.cursor = 'crosshair';
+    }
+
+    map.on('click', function(e) {
+      if (simMode === 'placing') {
+        const idx = simUsers.length;
+        const color = simColors[idx % simColors.length];
+        const user = {
+          id: 'sim-user-' + (idx + 1),
+          name: 'User ' + (idx + 1),
+          color,
+          marker: L.circleMarker(e.latlng, { radius: 8, color, fillColor: color, fillOpacity: 0.9 }).addTo(map),
+          route: [[e.latlng.lat, e.latlng.lng]],
+          polyline: null,
+          routeIdx: 0,
+          progress: 0
+        };
+        user.marker.bindTooltip(user.name, { permanent: true, direction: 'top', offset: [0, -10] });
+        simUsers.push(user);
+        simSelectedUser = user;
+        simMode = 'idle';
+        map.getContainer().style.cursor = '';
+        document.getElementById('btnAddUser').textContent = 'Add User';
+        document.getElementById('btnDefineRoute').disabled = false;
+        renderSimUsers();
+      } else if (simMode === 'routing' && simSelectedUser) {
+        simSelectedUser.route.push([e.latlng.lat, e.latlng.lng]);
+        updateRoutePolyline(simSelectedUser);
+      }
+    });
+
+    function simDefineRoute() {
+      if (!simSelectedUser) return;
+      simMode = 'routing';
+      map.getContainer().style.cursor = 'crosshair';
+      document.getElementById('btnDefineRoute').style.display = 'none';
+      document.getElementById('btnRouteDone').style.display = '';
+      simSelectedUser.route = [simSelectedUser.route[0]];
+      if (simSelectedUser.polyline) { map.removeLayer(simSelectedUser.polyline); simSelectedUser.polyline = null; }
+    }
+
+    function simRouteDone() {
+      simMode = 'idle';
+      map.getContainer().style.cursor = '';
+      document.getElementById('btnDefineRoute').style.display = '';
+      document.getElementById('btnRouteDone').style.display = 'none';
+      updatePlayButton();
+    }
+
+    function updateRoutePolyline(user) {
+      if (user.polyline) map.removeLayer(user.polyline);
+      if (user.route.length > 1) {
+        user.polyline = L.polyline(user.route, { color: user.color, weight: 3, dashArray: '6 4', opacity: 0.7 }).addTo(map);
+      }
+    }
+
+    function renderSimUsers() {
+      const el = document.getElementById('sim-users-list');
+      el.innerHTML = simUsers.map(u => `
+        <div class="sim-user-item" onclick="simSelectUser('${u.id}')" style="${simSelectedUser && simSelectedUser.id === u.id ? 'border-color:' + u.color : ''}">
+          <div style="display:flex;align-items:center">
+            <div class="sim-user-color" style="background:${u.color}"></div>
+            <span>${u.name}</span>
+          </div>
+          <span style="color:#999;font-size:10px">${u.route.length} pts</span>
+        </div>
+      `).join('');
+    }
+
+    function simSelectUser(id) {
+      simSelectedUser = simUsers.find(u => u.id === id);
+      document.getElementById('btnDefineRoute').disabled = false;
+      renderSimUsers();
+    }
+
+    function updatePlayButton() {
+      const hasRoutes = simUsers.some(u => u.route.length >= 2);
+      document.getElementById('btnPlay').disabled = !hasRoutes;
+    }
+
+    // Speed / interval sliders
+    document.getElementById('simSpeed').addEventListener('input', function() {
+      document.getElementById('simSpeedVal').textContent = this.value + 'x';
+    });
+    document.getElementById('simInterval').addEventListener('input', function() {
+      document.getElementById('simIntervalVal').textContent = this.value;
+    });
+
+    // Point-in-polygon (ray casting)
+    function pointInPolygon(lat, lng, polygon) {
+      const vs = polygon.getLatLngs()[0];
+      let inside = false;
+      for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+        const xi = vs[i].lat, yi = vs[i].lng;
+        const xj = vs[j].lat, yj = vs[j].lng;
+        const intersect = ((yi > lng) !== (yj > lng)) && (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+
+    function highlightArea(lat, lng) {
+      Object.values(layers).forEach(polygon => {
+        if (pointInPolygon(lat, lng, polygon)) {
+          polygon.setStyle({ fillOpacity: 0.5 });
+          setTimeout(() => polygon.setStyle({ fillOpacity: 0.2 }), 400);
+        }
+      });
+    }
+
+    function simTick() {
+      if (!simRunning) return;
+      const speed = parseFloat(document.getElementById('simSpeed').value);
+      const interval = parseInt(document.getElementById('simInterval').value);
+      const step = 0.02 * speed;
+
+      simUsers.forEach(u => {
+        if (u.route.length < 2) return;
+        u.progress += step;
+        while (u.progress >= 1 && u.routeIdx < u.route.length - 2) {
+          u.progress -= 1;
+          u.routeIdx++;
+        }
+        if (u.routeIdx >= u.route.length - 2 && u.progress >= 1) {
+          u.routeIdx = 0;
+          u.progress = 0;
+        }
+        const from = u.route[u.routeIdx];
+        const to = u.route[u.routeIdx + 1];
+        const lat = from[0] + (to[0] - from[0]) * u.progress;
+        const lng = from[1] + (to[1] - from[1]) * u.progress;
+        u.marker.setLatLng([lat, lng]);
+        highlightArea(lat, lng);
+        sendSimPing(u.id, lat, lng);
+      });
+
+      simTimer = setTimeout(simTick, parseInt(document.getElementById('simInterval').value));
+    }
+
+    async function sendSimPing(userId, lat, lng) {
+      simStats.sent++;
+      updateSimStats();
+      try {
+        const res = await fetch(`${API}/locations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, latitude: lat, longitude: lng, timestamp: new Date().toISOString() })
+        });
+        if (res.ok) simStats.ok++; else simStats.fail++;
+      } catch { simStats.fail++; }
+      updateSimStats();
+    }
+
+    function updateSimStats() {
+      document.getElementById('simSent').textContent = simStats.sent;
+      document.getElementById('simOk').textContent = simStats.ok;
+      document.getElementById('simFail').textContent = simStats.fail;
+    }
+
+    function simPause() {
+      simRunning = false;
+      clearTimeout(simTimer);
+      document.getElementById('btnPlay').disabled = false;
+      document.getElementById('btnPause').disabled = true;
+    }
+
+    function simStop() {
+      simRunning = false;
+      clearTimeout(simTimer);
+      document.getElementById('btnPlay').disabled = false;
+      document.getElementById('btnPause').disabled = true;
+      document.getElementById('btnStop').disabled = true;
+      simUsers.forEach(u => {
+        if (u.route.length > 0) u.marker.setLatLng(u.route[0]);
+        u.routeIdx = 0; u.progress = 0;
+      });
+    }
+
+    function simPlay() {
+      if (simRunning) return;
+      simRunning = true;
+      document.getElementById('btnPlay').disabled = true;
+      document.getElementById('btnPause').disabled = false;
+      document.getElementById('btnStop').disabled = false;
+      simTick();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // Tab 3: Load Test
+    // ═══════════════════════════════════════════════════
+    let ltRunning = false;
+    let ltAbort = null;
+    let ltData = { sent: 0, ok: 0, fail: 0, totalTime: 0, startTime: 0 };
+    let ltQueuePoll = null;
+
+    let ltBoundsRect = null;
+    let ltDrawing = false;
+    let ltDrawStart = null;
+
+    function ltDrawBounds() {
+      ltDrawing = true;
+      map.dragging.disable();
+      document.getElementById('btnLtDraw').textContent = 'Draw on map...';
+      map.getContainer().style.cursor = 'crosshair';
+    }
+
+    map.on('mousedown', function(e) {
+      if (!ltDrawing) return;
+      ltDrawStart = e.latlng;
+      if (ltBoundsRect) map.removeLayer(ltBoundsRect);
+      ltBoundsRect = L.rectangle([ltDrawStart, ltDrawStart], { color: '#FF9800', weight: 2, fillOpacity: 0.15, dashArray: '6 4' }).addTo(map);
+    });
+
+    map.on('mousemove', function(e) {
+      if (!ltDrawing || !ltDrawStart) return;
+      ltBoundsRect.setBounds([ltDrawStart, e.latlng]);
+    });
+
+    map.on('mouseup', function(e) {
+      if (!ltDrawing || !ltDrawStart) return;
+      ltDrawing = false;
+      ltDrawStart = null;
+      map.dragging.enable();
+      map.getContainer().style.cursor = '';
+      document.getElementById('btnLtDraw').textContent = 'Draw';
+      const b = ltBoundsRect.getBounds();
+      document.getElementById('ltMinLat').value = b.getSouth().toFixed(4);
+      document.getElementById('ltMaxLat').value = b.getNorth().toFixed(4);
+      document.getElementById('ltMinLng').value = b.getWest().toFixed(4);
+      document.getElementById('ltMaxLng').value = b.getEast().toFixed(4);
+    });
+
+    const ltPingLayer = L.layerGroup().addTo(map);
+
+    function ltShowPing(lat, lng, ok) {
+      const dot = L.circleMarker([lat, lng], {
+        radius: 3, weight: 0, fillOpacity: 0.8,
+        fillColor: '#000',
+        renderer: L.canvas()
+      }).addTo(ltPingLayer);
+      setTimeout(() => ltPingLayer.removeLayer(dot), 1500);
+    }
+
+    function ltStartTest() {
+      if (ltRunning) return;
+      ltRunning = true;
+      ltAbort = new AbortController();
+      ltPingLayer.clearLayers();
+      ltData = { sent: 0, ok: 0, fail: 0, totalTime: 0, startTime: Date.now() };
+      document.getElementById('ltStart').disabled = true;
+      document.getElementById('ltStopBtn').disabled = false;
+
+      const rps = parseInt(document.getElementById('ltRps').value) || 50;
+      const duration = parseInt(document.getElementById('ltDuration').value) || 30;
+      const minLat = parseFloat(document.getElementById('ltMinLat').value);
+      const maxLat = parseFloat(document.getElementById('ltMaxLat').value);
+      const minLng = parseFloat(document.getElementById('ltMinLng').value);
+      const maxLng = parseFloat(document.getElementById('ltMaxLng').value);
+
+      const intervalMs = 1000 / rps;
+      const endTime = Date.now() + duration * 1000;
+
+      function sendOne() {
+        if (!ltRunning || Date.now() > endTime) { ltFinish(); return; }
+        const lat = minLat + Math.random() * (maxLat - minLat);
+        const lng = minLng + Math.random() * (maxLng - minLng);
+        const userId = 'lt-user-' + Math.floor(Math.random() * 1000);
+        const t0 = performance.now();
+        ltData.sent++;
+
+        fetch(`${API}/locations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, latitude: lat, longitude: lng, timestamp: new Date().toISOString() }),
+          signal: ltAbort.signal
+        }).then(res => {
+          ltData.totalTime += performance.now() - t0;
+          if (res.ok) { ltData.ok++; ltShowPing(lat, lng, true); }
+          else { ltData.fail++; ltShowPing(lat, lng, false); }
+          updateLtMetrics();
+        }).catch(() => {
+          ltData.fail++;
+          ltShowPing(lat, lng, false);
+          updateLtMetrics();
+        });
+
+        setTimeout(sendOne, intervalMs);
+      }
+
+      sendOne();
+
+      // Poll queue stats
+      ltQueuePoll = setInterval(pollQueueStats, 1000);
+      // Update elapsed timer
+      ltElapsedTimer = setInterval(() => {
+        document.getElementById('ltElapsed').textContent = ((Date.now() - ltData.startTime) / 1000).toFixed(0);
+      }, 500);
+
+      updateLtMetrics();
+    }
+
+    let ltElapsedTimer = null;
+
+    function ltFinish() {
+      ltRunning = false;
+      document.getElementById('ltStart').disabled = false;
+      document.getElementById('ltStopBtn').disabled = true;
+      clearInterval(ltQueuePoll);
+      clearInterval(ltElapsedTimer);
+    }
+
+    function ltStopTest() {
+      if (ltAbort) ltAbort.abort();
+      ltFinish();
+    }
+
+    function updateLtMetrics() {
+      document.getElementById('ltTotalSent').textContent = ltData.sent;
+      document.getElementById('ltTotalOk').textContent = ltData.ok;
+      document.getElementById('ltTotalFail').textContent = ltData.fail;
+      const responded = ltData.ok + ltData.fail;
+      document.getElementById('ltAvgTime').textContent = responded > 0 ? (ltData.totalTime / responded).toFixed(0) : '0';
+      const elapsed = (Date.now() - ltData.startTime) / 1000;
+      document.getElementById('ltThroughput').textContent = elapsed > 0 ? (responded / elapsed).toFixed(1) : '0';
+    }
+
+    async function pollQueueStats() {
+      try {
+        const res = await fetch(`${API}/queue/stats`);
+        const d = await res.json();
+        document.getElementById('qWaiting').textContent = d.waiting;
+        document.getElementById('qActive').textContent = d.active;
+        document.getElementById('qCompleted').textContent = d.completed;
+        document.getElementById('qFailed').textContent = d.failed;
+      } catch {}
+    }
+
+    // ── Smoke Test ──
+    let smokePoint = null;
+    let smokeMarker = null;
+
+    function smokePickPoint() {
+      simMode = 'smoke-pick';
+      document.getElementById('btnSmokePick').textContent = 'Click map...';
+      map.getContainer().style.cursor = 'crosshair';
+    }
+
+    // Hook into existing map click handler — add smoke pick mode
+    map.on('click', function(e) {
+      if (simMode === 'smoke-pick') {
+        smokePoint = { lat: e.latlng.lat, lng: e.latlng.lng };
+        if (smokeMarker) map.removeLayer(smokeMarker);
+        smokeMarker = L.circleMarker(e.latlng, { radius: 6, color: '#FF5722', fillColor: '#FF5722', fillOpacity: 0.9 }).addTo(map);
+        smokeMarker.bindTooltip('Smoke Test', { permanent: true, direction: 'top', offset: [0, -8] });
+        document.getElementById('smokeCoord').textContent = `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+        document.getElementById('btnSmokePick').textContent = 'Pick Point';
+        document.getElementById('btnSmoke').disabled = false;
+        simMode = 'idle';
+        map.getContainer().style.cursor = '';
+      }
+    });
+
+    async function runSmokeTest() {
+      if (!smokePoint) return;
+      const el = document.getElementById('smokeResult');
+      el.innerHTML = '<div class="smoke-result smoke-running">Running smoke test...</div>';
+      document.getElementById('btnSmoke').disabled = true;
+      const userId = 'smoke-' + Date.now();
+      const { lat, lng } = smokePoint;
+      // Send 3 pings at the picked point with tiny offsets
+      const pings = [
+        { latitude: lat, longitude: lng },
+        { latitude: lat + 0.0001, longitude: lng + 0.0001 },
+        { latitude: lat + 0.0002, longitude: lng + 0.0002 }
+      ];
+
+      try {
+        for (const p of pings) {
+          const res = await fetch(`${API}/locations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, ...p, timestamp: new Date().toISOString() })
+          });
+          if (!res.ok) throw new Error('POST failed: ' + res.status);
+        }
+
+        await new Promise(r => setTimeout(r, 3000));
+
+        const logsRes = await fetch(`${API}/logs?userId=${userId}`);
+        if (!logsRes.ok) throw new Error('GET /logs failed: ' + logsRes.status);
+        const logsData = await logsRes.json();
+        const logs = logsData.data || logsData;
+
+        if (logs.length >= 1) {
+          el.innerHTML = `<div class="smoke-result smoke-pass">PASS — ${logs.length} entry log(s) for ${userId}</div>`;
+        } else {
+          el.innerHTML = `<div class="smoke-result smoke-fail">FAIL — No entry logs. Is the point inside an area?</div>`;
+        }
+      } catch (err) {
+        el.innerHTML = `<div class="smoke-result smoke-fail">FAIL — ${err.message}</div>`;
+      }
+      document.getElementById('btnSmoke').disabled = false;
+    }
+
+    // ── Init ──
+    loadAreas();
+  </script>
+</body>
+</html>

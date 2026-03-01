@@ -31,20 +31,24 @@ export class AreasService {
     return this.areaRepository
       .createQueryBuilder('area')
       .select([
-        'area.id',
-        'area.name',
+        'area.id AS id',
+        'area.name AS name',
         'ST_AsGeoJSON(area.boundary)::json AS boundary',
         'area.created_at AS "createdAt"',
       ])
       .getRawMany();
   }
 
+  async delete(id: string): Promise<void> {
+    await this.areaRepository.delete(id);
+  }
+
   async findOne(id: string): Promise<Area> {
     const result = await this.areaRepository
       .createQueryBuilder('area')
       .select([
-        'area.id',
-        'area.name',
+        'area.id AS id',
+        'area.name AS name',
         'ST_AsGeoJSON(area.boundary)::json AS boundary',
         'area.created_at AS "createdAt"',
       ])

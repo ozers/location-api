@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { AreasService } from './areas.service';
 import { CreateAreaDto } from './dto/create-area.dto';
 
@@ -14,5 +14,10 @@ export class AreasController {
   @Get()
   async findAll() {
     return this.areasService.findAll();
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string) {
+    await this.areasService.delete(id);
   }
 }
