@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import configuration from './config/configuration';
 import { BullModule } from '@nestjs/bullmq';
+import { AreasModule } from './modules/areas/areas.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { BullModule } from '@nestjs/bullmq';
         },
       }),
     }),
+    AreasModule,
   ],
 })
 export class AppModule {}
