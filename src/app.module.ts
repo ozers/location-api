@@ -27,7 +27,7 @@ import { QueueStatsModule } from './modules/queue-stats/queue-stats.module';
         password: config.get('database.password'),
         database: config.get('database.name'),
         autoLoadEntities: true,
-        synchronize: true,
+        synchronize: process.env.NODE_ENV !== 'production',
         extra: {
           max: config.get('database.poolSize'),
         },

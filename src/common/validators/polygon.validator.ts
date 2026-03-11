@@ -23,6 +23,11 @@ export class IsValidPolygon implements ValidatorConstraintInterface {
     const ring = polygon.coordinates[0];
     if (ring.length < 4) return false;
 
+    // GeoJSON spec: first and last coordinate must be identical (closed ring)
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) return false;
+
     for (const coordinate of ring) {
       if (!Array.isArray(coordinate) || coordinate.length !== 2) return false;
 
