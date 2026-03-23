@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Area } from '../../entities/area.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { CreateAreaDto } from './dto/create-area.dto';
+import { FindAreasDto } from './dto/find-areas.dto';
 
 @Injectable()
 export class AreasService {
@@ -15,16 +16,18 @@ export class AreasService {
     const result = await this.areaRepository.query(
       `INSERT INTO areas (name, boundary)
        VALUES ($1, ST_SetSRID(ST_GeomFromGeoJSON($2), 4326))
-       RETURNING id`,
+       RETURNING id, name, ST_AsGeoJSON(boundary)::json AS boundary, created_at AS "createdAt"`,
       [dto.name, JSON.stringify(dto.boundary)],
     );
+    const [resultArea] = result;
 
-    const [inserted]: [{ id: string }] = result;
-    return this.findOne(inserted.id);
+    return resultArea;
   }
 
-  async findAll(): Promise<any[]> {
-    return this.areaRepository
+  async findAll(dto: FindAreasDto) {
+    const limit = dto.limit ?? 20;
+
+    const qb = this.areaRepository
       .createQueryBuilder('area')
       .select([
         'area.id AS id',
@@ -33,7 +36,23 @@ export class AreasService {
         'area.created_at AS "createdAt"',
       ])
       .where('area.deleted_at IS NULL')
-      .getRawMany();
+      .orderBy('area.created_at', 'DESC')
+      .limit(limit + 1);
+
+    if (dto.page) {
+      qb.andWhere(
+        'area.created_at <= (SELECT a.created_at FROM areas a WHERE a.id = :page)',
+        { page: dto.page },
+      );
+    }
+
+    const results: { id: string }[] = await qb.getRawMany();
+
+    const hasNext = results.length > limit;
+    const items = hasNext ? results.slice(0, limit) : results;
+    const nextPage = hasNext ? items[items.length - 1].id : null;
+
+    return { items, nextPage };
   }
 
   async delete(id: string): Promise<void> {
@@ -55,4 +74,19 @@ export class AreasService {
 
     return result as Area;
   }
+
+  async findContainingAreas(
+    latitude: number,
+    longitude: number,
+    manager?: EntityManager,
+  ): Promise<{ id: string; name: string }[]> {
+    const repo = manager?.getRepository(Area) ?? this.areaRepository;
+    return repo.query(
+      `SELECT id, name FROM areas
+       WHERE deleted_at IS NULL
+         AND ST_Contains(boundary, ST_SetSRID(ST_MakePoint($1, $2), 4326))`,
+      [longitude, latitude],
+    );
+  }
+
 }

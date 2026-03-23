@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { AreaEntryLog } from '../../entities';
-import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import { EntityManager, Repository } from 'typeorm';
+import { AreaEntryLog } from '../../entities';
 import { QueryLogsDto } from './dto/query-logs.dto';
 
 @Injectable()
@@ -11,11 +11,22 @@ export class LogsService {
     private readonly areaEntryLogRepository: Repository<AreaEntryLog>,
   ) {}
 
+  async logEntry(
+    userId: string,
+    areaId: string,
+    enteredAt: Date,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const repo =
+      manager?.getRepository(AreaEntryLog) ?? this.areaEntryLogRepository;
+    await repo.save({ userId, areaId, enteredAt });
+  }
+
   async findAll(query: QueryLogsDto) {
     const { userId, areaId, startDate, endDate, page = 1, limit = 10 } = query;
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.areaEntryLogRepository
+    const qb = this.areaEntryLogRepository
       .createQueryBuilder('log')
       .leftJoinAndSelect('log.area', 'area')
       .select([
@@ -26,15 +37,13 @@ export class LogsService {
         'log.entered_at AS "enteredAt"',
       ]);
 
-    if (userId) queryBuilder.andWhere('log.user_id = :userId', { userId });
-    if (areaId) queryBuilder.andWhere('log.area_id = :areaId', { areaId });
-    if (startDate)
-      queryBuilder.andWhere('log.entered_at >= :startDate', { startDate });
-    if (endDate)
-      queryBuilder.andWhere('log.entered_at <= :endDate', { endDate });
+    if (userId) qb.andWhere('log.user_id = :userId', { userId });
+    if (areaId) qb.andWhere('log.area_id = :areaId', { areaId });
+    if (startDate) qb.andWhere('log.entered_at >= :startDate', { startDate });
+    if (endDate) qb.andWhere('log.entered_at <= :endDate', { endDate });
 
-    const total = await queryBuilder.getCount();
-    const data = await queryBuilder
+    const total = await qb.getCount();
+    const data = await qb
       .orderBy('log.entered_at', 'DESC')
       .offset(skip)
       .limit(limit)

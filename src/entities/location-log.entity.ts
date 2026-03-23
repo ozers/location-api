@@ -12,7 +12,7 @@ export class LocationLog {
   id!: string;
 
   @Index()
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ type: 'varchar', length: 255, name: 'user_id' })
   userId!: string;
 
   @Column({ type: 'decimal', precision: 9, scale: 6 })

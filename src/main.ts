@@ -4,9 +4,17 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { json } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // CORS
+  app.enableCors();
+
+  // Payload limit
+  app.use(json({ limit: '1mb' }));
 
   // Validation
   app.useGlobalPipes(
@@ -17,8 +25,8 @@ async function bootstrap() {
     }),
   );
 
-  // Exception Filter
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // Exception Filters (order matters: AllExceptions first, HttpException second)
+  app.useGlobalFilters(new AllExceptionsFilter(), new HttpExceptionFilter());
 
   // Swagger
   const swaggerConfig = new DocumentBuilder()

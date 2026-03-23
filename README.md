@@ -2,6 +2,25 @@
 
 Location logging and geo-fence tracking API. Receives user location data, compares it against predefined geographic areas (polygons), and logs area entry events asynchronously.
 
+## Case
+
+A system that periodically receives user location data, checks whether those coordinates fall within predefined geographic boundaries (geo-fences), and logs area entry events to the database. The system must handle high-throughput traffic and be designed with performance optimizations for concurrent request processing.
+
+**Required:** NestJS, TypeScript, PostgreSQL, TypeORM or Prisma. Endpoints for submitting locations, querying entry logs, and managing geographic areas.
+
+### Beyond the Requirements
+
+| Category | What was added | Why |
+|----------|---------------|-----|
+| Spatial engine | PostGIS with `ST_Contains` + GiST index | Sub-millisecond polygon containment instead of brute-force coordinate math |
+| Async processing | BullMQ queue, `POST /locations` returns 202 | Decouples ingestion from heavy spatial computation, keeps response times low |
+| Deduplication | Redis per-user Set for entry tracking | Prevents duplicate entry logs when a user stays within the same area |
+| Pagination | Cursor-based (UUID) on GET /areas | Stable results under concurrent inserts, no offset drift |
+| Data integrity | Soft deletes on areas | Deleted areas are excluded from containment queries while preserving historical logs |
+| Resilience | Rate limiting (100 req/min), global exception filters, health checks (DB + Redis) | Production-ready error handling and observability |
+| Documentation | Swagger UI at `/api` | Interactive API exploration |
+| Testing tools | Leaflet dashboard with area drawing, user simulation, and load testing | Visual verification and performance benchmarking without external tools |
+
 ## Tech Stack
 
 | Layer | Technology | Purpose |
@@ -60,7 +79,7 @@ Response: `202 Accepted`
 ```json
 {
   "status": "queued",
-  "message": "Location received and queued for processing"
+  "message": "Location processing has been queued successfully."
 }
 ```
 
@@ -82,11 +101,15 @@ curl -X POST http://localhost:3000/areas \
 
 ### GET /areas
 
-Lists all defined areas with boundaries as GeoJSON.
+Lists areas with cursor-based pagination. Returns boundaries as GeoJSON.
 
 ```bash
-curl http://localhost:3000/areas
+curl "http://localhost:3000/areas?limit=20"
+# Next page:
+curl "http://localhost:3000/areas?page=<nextPage>&limit=20"
 ```
+
+Query parameters: `page` (UUID cursor from `nextPage`), `limit` (1-100, default 20).
 
 ### GET /logs
 
@@ -100,7 +123,7 @@ Query parameters: `userId`, `areaId`, `startDate`, `endDate`, `page`, `limit`.
 
 ### DELETE /areas/:id
 
-Deletes an area by ID.
+Soft-deletes an area by ID. Returns `204 No Content`.
 
 ```bash
 curl -X DELETE http://localhost:3000/areas/<area-id>
@@ -146,24 +169,27 @@ curl http://localhost:3000/health
 
 ```
 src/
-├── main.ts                              # Bootstrap, Swagger, ValidationPipe
-├── app.module.ts                        # Root module
+├── main.ts                              # Bootstrap, Swagger, ValidationPipe, global filters
+├── app.module.ts                        # Root module, ThrottlerGuard
 ├── config/
 │   └── configuration.ts                 # ENV config mapping
 ├── entities/
 │   ├── index.ts                         # Barrel exports
-│   ├── area.entity.ts                   # areas table
+│   ├── area.entity.ts                   # areas table (spatial index)
 │   ├── location-log.entity.ts           # location_logs table
 │   └── area-entry-log.entity.ts         # area_entry_logs table
 ├── modules/
-│   ├── areas/                           # POST /areas, GET /areas, DELETE /areas/:id
-│   ├── locations/                       # POST /locations + queue processor
-│   ├── logs/                            # GET /logs
+│   ├── areas/                           # Area CRUD + geo-fence containment queries
+│   ├── locations/                       # POST /locations + BullMQ processor
+│   ├── logs/                            # Entry log queries + logEntry operations
 │   ├── queue-stats/                     # GET /queue/stats
-│   └── health/                          # GET /health
+│   └── health/                          # GET /health (DB + Redis)
 └── common/
+    ├── redis/
+    │   └── redis.module.ts              # Global shared Redis provider
     ├── filters/
-    │   └── http-exception.filter.ts     # Global error handler
+    │   ├── http-exception.filter.ts     # HTTP error formatting
+    │   └── all-exceptions.filter.ts     # Unhandled exception catch-all
     └── validators/
         └── polygon.validator.ts         # GeoJSON polygon validation
 ```
@@ -171,10 +197,15 @@ src/
 ## Architecture Decisions
 
 - **PostGIS** for polygon containment queries, GiST spatial index makes them fast
-- **BullMQ** for async processing - Redis already needed, no extra infrastructure
-- **TypeORM** over Prisma - better PostGIS raw query support
-- **202 Accepted** for POST /locations - processing is async, 200 would be misleading
-- **GeoJSON** format - industry standard, PostGIS supports it natively
+- **BullMQ** for async processing — Redis already needed, no extra infrastructure
+- **TypeORM** over Prisma — better PostGIS raw query support
+- **202 Accepted** for POST /locations — processing is async, 200 would be misleading
+- **GeoJSON** format — industry standard, PostGIS supports it natively
+- **Global Redis provider** — single shared connection via `RedisModule`, injected with `@Inject(REDIS_CLIENT)` where needed (processor, health check)
+- **Separation of concerns** — `AreasService` handles area CRUD and geo-queries; `LogsService` owns entry log writes and queries. Processor orchestrates both
+- **Cursor-based pagination** for GET /areas — avoids offset drift on large datasets
+- **Rate limiting** — global ThrottlerGuard (100 req/min) to protect against abuse
+- **Soft deletes** — areas are soft-deleted, filtered out from containment queries
 
 ## Dashboard
 
