@@ -143,4 +143,5 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+.DS_Store.claude/settings.local.json
 .DS_Store
